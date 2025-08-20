@@ -1,0 +1,30 @@
+# Node.js
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# VSCode
+.vscode/
+
+# clasp/Google Apps Script
+.clasp.json
+.envrc
+.direnv/
+
+# API-Key/Config
+config.js
+
+# Test/coverage
+coverage/
+
+# Sonstiges
+.DS_Store
+*.swp
+
+# Nix
+result/
+flake.lock
+
+# Build-Artefakte
+/dist/
+/build/

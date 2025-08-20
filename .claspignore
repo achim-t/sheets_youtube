@@ -1,0 +1,16 @@
+# Alles ignorieren ...
+**/*
+
+# ... außer .js-Dateien und appsscript.json im Root
+!/*.js
+!/appsscript.json
+
+# Optional: Ignore node_modules and build artifacts
+node_modules/
+dist/
+build/
+
+# Optional: Ignore config files
+.claspignore
+.envrc
+flake.*
