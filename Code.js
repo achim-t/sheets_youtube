@@ -7,7 +7,7 @@ function _getFirstDataRow(sheet) {
     }
   }
   // Fallback: falls nichts gefunden → Zeile 2
-  return 2;
+  return 4;
 }
 
 
@@ -62,11 +62,20 @@ function getNewVideosFromUrl() {
   var channelData = JSON.parse(channelResponse.getContentText());
   var uploadsPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.uploads;
 
-  // Neueste bekannte Zeit aus der Tabelle (erste Datenzeile nach Header, Spalte 4)
+  // Neueste bekannte Zeit aus der Tabelle (erste Datenzeile nach Header, Spalte mit Überschrift 'Upload-Datum')
   var firstDataRow = _getFirstDataRow(sheet);
   var newestDate = null;
-  if (sheet.getLastRow() >= firstDataRow) {
-    newestDate = new Date(sheet.getRange(firstDataRow, 4).getValue());
+  // Suche die Spalte mit der Überschrift 'Upload-Datum' in Zeile 3
+  var headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var uploadDateCol = headers.indexOf('Upload-Datum') + 1; // +1, weil indexOf 0-basiert
+  if (uploadDateCol > 0 && sheet.getLastRow() >= firstDataRow) {
+    var dateValues = sheet.getRange(firstDataRow, uploadDateCol, sheet.getLastRow() - firstDataRow + 1, 1).getValues();
+    var maxDate = null;
+    for (var i = 0; i < dateValues.length; i++) {
+      var d = new Date(dateValues[i][0]);
+      if (!isNaN(d) && (maxDate === null || d > maxDate)) maxDate = d;
+    }
+    newestDate = maxDate;
   }
 
   var pageToken = "";
@@ -122,6 +131,7 @@ function getNewVideosFromUrl() {
   } while (pageToken);
 
   // Wenn neue Videos gefunden → oberhalb einfügen (unterhalb Header)
+  var msg = '';
   if (newRows.length > 0) {
     // Sortieren: neueste zuerst (YouTube API liefert zwar schon so, aber sicherheitshalber)
     newRows.sort(function(a, b) {
@@ -140,7 +150,15 @@ function getNewVideosFromUrl() {
 
     sheet.insertRowsAfter(firstDataRow - 1, newRows.length);
     sheet.getRange(firstDataRow, 1, newRows.length, newRows[0].length).setValues(newRows);
+    if (newRows.length === 1) {
+      msg = 'Es wurde 1 neues Video hinzugefügt.';
+    } else {
+      msg = 'Es wurden ' + newRows.length + ' neue Videos hinzugefügt.';
+    }
+  } else {
+    msg = 'Keine neuen Videos gefunden.';
   }
+  SpreadsheetApp.getActiveSpreadsheet().toast(msg);
 }
 
 function onOpen() {
@@ -151,122 +169,7 @@ function onOpen() {
 }
 // Menü-Funktion für neue Videos (und initialen Import)
 function fetchNewVideosMenu() {
-  updateYoutubeVideos(getNewVideosFromUrl);
-}
-function generateSeriesColumns() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 4) return; // keine Daten
-  
-  // Titel-Spalte A, Daten ab Zeile 4
-  var titles = sheet.getRange(4, 1, lastRow - 3, 1).getValues();
-  
-  var seriesCol = [];
-  var episodeCol = [];
-  var restCol = [];
-  
-  for (var i = 0; i < titles.length; i++) {
-    var title = titles[i][0] || "";
-    
-    // Serie / Gruppe
-    var seriesMatch = title.match(/^(.*?)(?:\s*#\d+|\s*Episode\s*\d+)/);
-    var series = seriesMatch ? seriesMatch[1].trim() : title;
-    series = series.replace(/[-\s]+$/,"").trim();
-
-    
-    // Episodennummer
-    var epMatch = title.match(/#(\d+)/);
-    if (!epMatch) epMatch = title.match(/Episode\s*(\d+)/);
-    var episode = epMatch ? epMatch[1] : "";
-    
-    // Resttitel (vorher Trim + führendes "- " entfernen)
-    var rest = title.replace(/^(.*?)(?:\s*(?:#|Episode)\s*\d+[:\-]?\s*)/, "").trim();
-    rest = rest.replace(/^-\s*/, ""); // führendes "- " entfernen
-    
-    seriesCol.push([series]);
-    episodeCol.push([episode]);
-    restCol.push([rest]);
-  }
-  
-  // Spalten einfügen: nach Spalte A einfügen (jetzt B, C, D)
-  sheet.insertColumnsAfter(1, 3);
-  
-  // Überschriften in Zeile 3
-  sheet.getRange(3, 2).setValue("Serie");
-  sheet.getRange(3, 3).setValue("Episodennummer");
-  sheet.getRange(3, 4).setValue("Episodentitel");
-  
-  // Daten ab Zeile 4
-  sheet.getRange(4, 2, seriesCol.length, 1).setValues(seriesCol);
-  sheet.getRange(4, 3, episodeCol.length, 1).setValues(episodeCol);
-  sheet.getRange(4, 4, restCol.length, 1).setValues(restCol);
-}
-
-function sortByUploadDateDynamic() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var headerRow = 3;
-  var firstDataRow = headerRow + 1;
-  var lastRow = sheet.getLastRow();
-  if (lastRow < firstDataRow) return; // Keine Daten
-
-  // Überschriften aus Zeile 3 auslesen
-  var headers = sheet.getRange(headerRow, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-  // Index der Spalte "Upload-Datum" suchen
-  var dateColumn = headers.indexOf("Upload-Datum") + 1; // +1, weil indexOf nullbasiert ist
-  if (dateColumn === 0) {
-    return;
-  }
-
-  // Bereich der Daten (ohne Überschrift)
-  var range = sheet.getRange(firstDataRow, 1, lastRow - firstDataRow + 1, sheet.getLastColumn());
-
-  // Sortieren nach Upload-Datum absteigend (neueste zuerst)
-  range.sort({column: dateColumn, ascending: false});
-}
-
-function updateYoutubeVideos(fetchFunction) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-
-  // Filter sichern
-  var savedFilter = saveCurrentFilter(sheet);
-
-  // Daten sortieren (neueste Uploads oben)
-  sortByUploadDateDynamic();
-
-  // Youtube-Videos abrufen
-  fetchFunction();
-
-  // Filter wiederherstellen
-  restoreFilter(sheet, savedFilter);
-}
-
-// Beispiel Hilfsfunktionen zum Speichern/Restaurieren von Filtern:
-function saveCurrentFilter(sheet) {
-  var filter = sheet.getFilter();
-  if (!filter) return null;
-  
-  var filterRange = filter.getRange();
-  var filterSettings = [];
-  
-  for (var i = 1; i <= filterRange.getNumColumns(); i++) {
-    var criteria = filter.getColumnFilterCriteria(i);
-    filterSettings.push(criteria ? criteria.copy() : null);
-  }
-  
-  return {range: filterRange, criteria: filterSettings};
-}
-
-function restoreFilter(sheet, savedFilter) {
-  if (!savedFilter) return;
-  
-  if (sheet.getFilter()) sheet.getFilter().remove();
-  sheet.getRange(savedFilter.range.getA1Notation()).createFilter();
-  var filter = sheet.getFilter();
-  
-  for (var i = 0; i < savedFilter.criteria.length; i++) {
-    if (savedFilter.criteria[i]) filter.setColumnFilterCriteria(i + 1, savedFilter.criteria[i]);
-  }
+    getNewVideosFromUrl();
 }
 
 

@@ -1,16 +1,15 @@
-# Alles ignorieren ...
-**/*
+# node_modules niemals hochladen
+node_modules/**
 
-# ... außer .js-Dateien und appsscript.json im Root
-!/*.js
-!/appsscript.json
-
-# Optional: Ignore node_modules and build artifacts
-node_modules/
-dist/
-build/
-
-# Optional: Ignore config files
+# Lokale Konfigurationsdateien
 .claspignore
+.gitignore
+package.json
+package-lock.json
+README.md
+flake.lock
+flake.nix
 .envrc
-flake.*
+
+# Tests und lokale Ordner
+test/**
