@@ -10,6 +10,7 @@ README.md
 flake.lock
 flake.nix
 .envrc
+config.example.js
 
 # Tests und lokale Ordner
 test/**
