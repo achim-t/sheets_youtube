@@ -10,6 +10,34 @@ function _getFirstDataRow(sheet) {
   return 4;
 }
 
+// Cache-Helpers: neuestes Upload-Datum (ISO-String) pro Tabellenblatt speichern
+function _sheetCacheKey(sheet) {
+  return 'lastUploadIso:' + sheet.getSheetId();
+}
+
+function _getCachedNewestIso(sheet) {
+  return PropertiesService.getDocumentProperties().getProperty(_sheetCacheKey(sheet));
+}
+
+function _setCachedNewestIso(sheet, iso) {
+  if (iso) {
+    PropertiesService.getDocumentProperties().setProperty(_sheetCacheKey(sheet), iso);
+  }
+}
+
+function _isoMax(a, b) {
+  if (!a) return b || null;
+  if (!b) return a || null;
+  return a >= b ? a : b; // ISO-Strings sind lexikographisch vergleichbar
+}
+
+function _toIsoStringIfDate(value) {
+  // Normalisiert Zellwerte: Date → ISO, String → unverändert, sonst null/leer → null
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string' && value) return value;
+  return null;
+}
+
 
 function _getChannelIdFromUrl(url, apiKey) {
   // Wenn es schon eine /channel/ URL ist, direkt extrahieren
@@ -62,20 +90,23 @@ function getNewVideosFromUrl() {
   var channelData = JSON.parse(channelResponse.getContentText());
   var uploadsPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.uploads;
 
-  // Neueste bekannte Zeit aus der Tabelle (erste Datenzeile nach Header, Spalte mit Überschrift 'Upload-Datum')
+  // Neueste bekannte Zeit (ISO) aus Cache oder Tabelle bestimmen
   var firstDataRow = _getFirstDataRow(sheet);
-  var newestDate = null;
-  // Suche die Spalte mit der Überschrift 'Upload-Datum' in Zeile 3
-  var headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var uploadDateCol = headers.indexOf('Upload-Datum') + 1; // +1, weil indexOf 0-basiert
-  if (uploadDateCol > 0 && sheet.getLastRow() >= firstDataRow) {
-    var dateValues = sheet.getRange(firstDataRow, uploadDateCol, sheet.getLastRow() - firstDataRow + 1, 1).getValues();
-    var maxDate = null;
-    for (var i = 0; i < dateValues.length; i++) {
-      var d = new Date(dateValues[i][0]);
-      if (!isNaN(d) && (maxDate === null || d > maxDate)) maxDate = d;
+  var newestIso = _getCachedNewestIso(sheet);
+  // Fallback: Tabelle scannen (Spalte 'Upload-Datum' ab erster Datenzeile)
+  if (!newestIso) {
+    var headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0] || [];
+    var uploadDateCol = headers.indexOf('Upload-Datum') + 1; // +1, weil indexOf 0-basiert
+    if (uploadDateCol > 0 && sheet.getLastRow() >= firstDataRow) {
+      var dateValues = sheet.getRange(firstDataRow, uploadDateCol, sheet.getLastRow() - firstDataRow + 1, 1).getValues();
+      var maxIso = null;
+      for (var i = 0; i < dateValues.length; i++) {
+        var iso = _toIsoStringIfDate(dateValues[i][0]);
+        if (iso) maxIso = _isoMax(maxIso, iso);
+      }
+      newestIso = maxIso;
+      if (newestIso) _setCachedNewestIso(sheet, newestIso);
     }
-    newestDate = maxDate;
   }
 
   var pageToken = "";
@@ -99,11 +130,10 @@ function getNewVideosFromUrl() {
     // WICHTIG: normale for-Schleife → echtes break möglich
     for (var k = 0; k < statsData.items.length; k++) {
       var video = statsData.items[k];
-      var dateIso = video.snippet.publishedAt;
-      var date = new Date(dateIso);
+      var dateIso = video.snippet.publishedAt; // ISO 8601 von der API
 
       // Sobald nicht-neuer → abbrechen (alles Folgende ist noch älter)
-      if (newestDate && date <= newestDate) { stop = true; break; }
+      if (newestIso && dateIso <= newestIso) { stop = true; break; }
 
       var title = video.snippet.title;
       var id = video.id;
@@ -134,9 +164,7 @@ function getNewVideosFromUrl() {
   var msg = '';
   if (newRows.length > 0) {
     // Sortieren: neueste zuerst (YouTube API liefert zwar schon so, aber sicherheitshalber)
-    newRows.sort(function(a, b) {
-      return new Date(b[6]) - new Date(a[6]);
-    });
+    newRows.sort(function(a, b) { return b[6].localeCompare(a[6]); });
 
     // Spalten: Titel, Serie, Episodennummer, Episodentitel, Video-ID, Link, Upload-Datum, Views, Dauer
     // Header ggf. setzen
@@ -150,6 +178,14 @@ function getNewVideosFromUrl() {
 
     sheet.insertRowsAfter(firstDataRow - 1, newRows.length);
     sheet.getRange(firstDataRow, 1, newRows.length, newRows[0].length).setValues(newRows);
+
+    // Cache aktualisieren: max(neuestes bisher, max aus neuen Zeilen)
+    var maxInsertedIso = null;
+    for (var r = 0; r < newRows.length; r++) {
+      maxInsertedIso = _isoMax(maxInsertedIso, newRows[r][6]);
+    }
+    var updatedIso = _isoMax(newestIso, maxInsertedIso);
+    if (updatedIso) _setCachedNewestIso(sheet, updatedIso);
     if (newRows.length === 1) {
       msg = 'Es wurde 1 neues Video hinzugefügt.';
     } else {
@@ -157,6 +193,20 @@ function getNewVideosFromUrl() {
     }
   } else {
     msg = 'Keine neuen Videos gefunden.';
+    // Optional: falls Cache leer aber Tabelle bereits Werte hat, sicherstellen
+    if (!newestIso) {
+      var headers2 = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0] || [];
+      var uploadDateCol2 = headers2.indexOf('Upload-Datum') + 1;
+      if (uploadDateCol2 > 0 && sheet.getLastRow() >= firstDataRow) {
+        var dateValues2 = sheet.getRange(firstDataRow, uploadDateCol2, sheet.getLastRow() - firstDataRow + 1, 1).getValues();
+        var maxIso2 = null;
+        for (var j = 0; j < dateValues2.length; j++) {
+          var iso2 = _toIsoStringIfDate(dateValues2[j][0]);
+          if (iso2) maxIso2 = _isoMax(maxIso2, iso2);
+        }
+        if (maxIso2) _setCachedNewestIso(sheet, maxIso2);
+      }
+    }
   }
   SpreadsheetApp.getActiveSpreadsheet().toast(msg);
 }
