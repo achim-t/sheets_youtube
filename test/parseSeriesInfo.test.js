@@ -33,4 +33,44 @@ describe('parseSeriesInfo', () => {
       rest: ""
     });
   });
+  
+  it('Let\'s Play Minecraft - Ep.102: Aloha', () => {
+    expect(parseSeriesInfo("Let's Play Minecraft - Ep.102: Aloha")).to.deep.equal({
+      series: "Let's Play Minecraft",
+      episode: "102",
+      rest: "Aloha"
+    });
+  });
+
+  it('Mindcrack Ultra Hardcore - S3E01: Harsh Terrain', () => {
+    expect(parseSeriesInfo("Mindcrack Ultra Hardcore - S3E01: Harsh Terrain")).to.deep.equal({
+      series: "Mindcrack Ultra Hardcore",
+  episode: "301",
+      rest: "Harsh Terrain"
+    });
+  });
+
+  it('Minecraft - (EATS) New Prototype', () => {
+    expect(parseSeriesInfo("Minecraft - (EATS) New Prototype")).to.deep.equal({
+      series: "Minecraft",
+      episode: "",
+      rest: "(EATS) New Prototype"
+    });
+  });
+
+  it('Minecraft - FoolCraft 3 #1: Fool Me Once', () => {
+    expect(parseSeriesInfo("Minecraft - FoolCraft 3 #1: Fool Me Once")).to.deep.equal({
+      series: "Minecraft - FoolCraft 3",
+      episode: "1",
+      rest: "Fool Me Once"
+    });
+  });
+
+  it('Minecraft - Nail: 2 For 1', () => {
+    expect(parseSeriesInfo("Minecraft - Nail: 2 For 1")).to.deep.equal({
+      series: "Minecraft - Nail",
+      episode: "",
+      rest: "2 For 1"
+    });
+  });
 });
