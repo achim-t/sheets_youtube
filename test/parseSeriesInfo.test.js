@@ -60,7 +60,7 @@ describe('parseSeriesInfo', () => {
 
   it('Minecraft - FoolCraft 3 #1: Fool Me Once', () => {
     expect(parseSeriesInfo("Minecraft - FoolCraft 3 #1: Fool Me Once")).to.deep.equal({
-      series: "Minecraft - FoolCraft 3",
+      series: "FoolCraft 3",
       episode: "1",
       rest: "Fool Me Once"
     });
@@ -68,9 +68,25 @@ describe('parseSeriesInfo', () => {
 
   it('Minecraft - Nail: 2 For 1', () => {
     expect(parseSeriesInfo("Minecraft - Nail: 2 For 1")).to.deep.equal({
-      series: "Minecraft - Nail",
+      series: "Nail",
       episode: "",
       rest: "2 For 1"
+    });
+  });
+
+  it('Harvest Moon 64 - Day 001 - 1/1/03', () => {
+    expect(parseSeriesInfo("Harvest Moon 64 - Day 001 - 1/1/03")).to.deep.equal({
+      series: "Harvest Moon 64",
+      episode: "1",
+      rest: "'1/1/03" // führendes Apostroph zum Erzwingen von Text in Google Sheets
+    });
+  });
+
+  it('Harvest Moon 64 - Day 002: Canadian Eh?', () => {
+    expect(parseSeriesInfo("Harvest Moon 64 - Day 002: Canadian Eh?")).to.deep.equal({
+      series: "Harvest Moon 64",
+      episode: "2",
+      rest: "Canadian Eh?"
     });
   });
 });

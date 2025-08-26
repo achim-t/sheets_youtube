@@ -129,6 +129,7 @@ function _collectNewRowsFromUploads(uploadsPlaylistId, apiKey, newestDate) {
     var playlistUrl = "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50" +
       "&playlistId=" + uploadsPlaylistId +
       (pageToken ? "&pageToken=" + pageToken : "") +
+      "&fields=nextPageToken,items(snippet(resourceId(videoId)))" +
       "&key=" + apiKey;
 
     var playlistData = JSON.parse(UrlFetchApp.fetch(playlistUrl).getContentText());
@@ -136,7 +137,9 @@ function _collectNewRowsFromUploads(uploadsPlaylistId, apiKey, newestDate) {
     if (videoIds.length === 0) break;
 
     var statsUrl = "https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics" +
-      "&id=" + videoIds.join(",") + "&key=" + apiKey;
+      "&id=" + videoIds.join(",") +
+      "&fields=items(id,snippet(publishedAt,title),statistics(viewCount),contentDetails(duration))" +
+      "&key=" + apiKey;
     var statsData = JSON.parse(UrlFetchApp.fetch(statsUrl).getContentText());
 
     for (var k = 0; k < statsData.items.length; k++) {
